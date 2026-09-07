@@ -1,0 +1,10 @@
+{
+  "app" : {
+    "id" : 102,
+    "name" : "Demande Interne",
+    "alias" : "DEMANDE-INTERNE",
+    "databaseSession" : {
+      "parsingSchema" : "WKSP_DEVSEN"
+    }
+  }
+}

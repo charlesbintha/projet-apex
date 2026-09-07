@@ -1,0 +1,65 @@
+taskDefinition SD_TICKET_TRIAGE (
+    name: Affectation du ticket
+    type: action
+    task {
+        subject: Affecter le ticket &TICKET_NUMBER. - &SUBJECT.
+        priority: 2
+    }
+    deadline {
+        dueOnType: interval
+        interval: P1D
+    }
+    source {
+        type: sqlQuery
+        sqlQuery:
+            ```sql
+            select ticket_number, subject, priority_label, category_name
+              from sd_ticket_overview_v
+             where ticket_id = :APEX$TASK_PK
+            ```
+    }
+    advanced {
+        detailsPage: {
+            page: 31
+            items: {
+                P31_TASK_ID: &TASK_ID.
+            }
+            clearCache: 31
+            action: resetPagination
+        }
+    }
+
+    parameter P_AGENT_ID (
+        label: Agent a affecter
+        dataType: string
+        validation {
+            required: false
+        }
+        advanced {
+            updatable: true
+        }
+    )
+
+    participant (
+        value {
+            type: expression
+            plsqlExpression: sd_workflow_api.admin_usernames
+        }
+    )
+
+    participant (
+        type: businessAdministrator
+        value {
+            type: expression
+            plsqlExpression: sd_workflow_api.admin_usernames
+        }
+    )
+
+    participant (
+        value {
+            type: expression
+            plsqlExpression: :APEX$TASK_INITIATOR
+        }
+    )
+
+)

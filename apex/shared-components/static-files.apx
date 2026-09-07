@@ -1,0 +1,15 @@
+file app.css (
+    mimeType: text/css
+    charSet: utf-8
+)
+
+file "icons/app-icon-144-rounded.png" (
+    mimeType: image/png
+    charSet: utf-8
+)
+
+file "icons/app-icon-32.png" (
+    mimeType: image/png
+    charSet: utf-8
+)
+

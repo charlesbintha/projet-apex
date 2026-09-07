@@ -1,0 +1,468 @@
+workflow SD_TICKET_LIFECYCLE (
+    name: Cycle de vie du ticket
+    title: Ticket &TICKET_NUMBER. - &SUBJECT.
+    comments {
+        comments: Orchestre l'affectation, le traitement, la resolution et sa validation.
+    }
+
+    version 1.0 (
+        additionalData {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select ticket_id, ticket_number, subject, priority_label, category_name,
+                       requester_name, requester_username, assigned_agent_name
+                  from sd_ticket_overview_v
+                 where ticket_id = :APEX$WORKFLOW_DETAIL_PK
+                ```
+        }
+        advanced {
+            diagram: orthogonal
+        }
+
+        activity ApplyAssignment (
+            name: Appliquer l'affectation
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: ASSIGN_FROM_TASK
+            }
+            layout {
+                sequence: 40
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @StartProcessing
+                }
+            )
+
+            parameter p_task_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: V_TRIAGE_TASK_ID
+                }
+                advanced {
+                    displaySequence: 20
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+        )
+
+        activity ApprovalDecision (
+            name: Resolution acceptee ?
+            type: switch
+            switch {
+                type: checkWorkflowVar
+            }
+            compare {
+                compareVar: V_APPROVAL_OUTCOME
+            }
+            layout {
+                sequence: 90
+            }
+
+            connection (
+                name: Approuvee
+                execution {
+                    sequence: 10
+                }
+                condition {
+                    operator: =
+                    value: APPROVED
+                }
+                activity {
+                    to: @CloseTicket
+                }
+            )
+
+            connection (
+                name: Refusee
+                execution {
+                    sequence: 20
+                }
+                condition {
+                    operator: =
+                    value: REJECTED
+                }
+                activity {
+                    to: @ReopenTicket
+                }
+            )
+
+        )
+
+        activity ApprovalTask (
+            name: Valider la resolution
+            type: humanTaskCreate
+            humanTask {
+                definition: @SD_RESOLUTION_APPROVAL
+                taskIdItem: V_APPROVAL_TASK_ID
+                detailsPkItem: APEX$WORKFLOW_DETAIL_PK
+            }
+            overrides {
+                initiatorCanComplete: false
+            }
+            result {
+                outcome: V_APPROVAL_OUTCOME
+            }
+            layout {
+                sequence: 80
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @ApprovalDecision
+                }
+            )
+
+        )
+
+        activity CloseTicket (
+            name: Fermer le ticket
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: CLOSE_AFTER_APPROVAL
+            }
+            layout {
+                sequence: 110
+            }
+
+            connection (
+                name: Terminer
+                activity {
+                    to: @End
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+        )
+
+        activity End (
+            name: Fin
+            type: workflowEnd
+            layout {
+                sequence: 120
+            }
+        )
+
+        activity ProcessingTask (
+            name: Traiter le ticket
+            type: humanTaskCreate
+            humanTask {
+                definition: @SD_TICKET_PROCESSING
+                taskIdItem: V_PROCESSING_TASK_ID
+                detailsPkItem: APEX$WORKFLOW_DETAIL_PK
+            }
+            overrides {
+                initiatorCanComplete: false
+            }
+            layout {
+                sequence: 60
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @ResolveTicket
+                }
+            )
+
+            parameter (
+                name: @P_RESOLUTION_NOTE
+                value {
+                    staticValue: #NOT_SET#
+                }
+            )
+
+        )
+
+        activity RecordWorkflow (
+            name: Enregistrer le workflow
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: RECORD_WORKFLOW
+            }
+            layout {
+                sequence: 20
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @TriageTask
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+            parameter p_workflow_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: staticValue
+                    staticValue: &APEX$WORKFLOW_ID.
+                }
+                advanced {
+                    displaySequence: 20
+                }
+            )
+
+        )
+
+        activity ReopenTicket (
+            name: Retourner en traitement
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: REOPEN_AFTER_REJECTION
+            }
+            layout {
+                sequence: 100
+            }
+
+            connection (
+                name: Reprendre
+                activity {
+                    to: @ProcessingTask
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+        )
+
+        activity ResolveTicket (
+            name: Resoudre le ticket
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: RESOLVE_FROM_TASK
+            }
+            layout {
+                sequence: 70
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @ApprovalTask
+                }
+            )
+
+            parameter p_task_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: V_PROCESSING_TASK_ID
+                }
+                advanced {
+                    displaySequence: 20
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+        )
+
+        activity Start (
+            name: Debut
+            type: workflowStart
+            layout {
+                sequence: 10
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @RecordWorkflow
+                }
+            )
+
+        )
+
+        activity StartProcessing (
+            name: Demarrer le traitement
+            type: invokeApi
+            invoke {
+                package: SD_WORKFLOW_API
+                procedureOrFunction: START_PROCESSING
+            }
+            layout {
+                sequence: 50
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @ProcessingTask
+                }
+            )
+
+            parameter p_ticket_id (
+                parameter {
+                    dataType: number
+                }
+                value {
+                    type: item
+                    item: APEX$WORKFLOW_DETAIL_PK
+                }
+                advanced {
+                    displaySequence: 10
+                }
+            )
+
+        )
+
+        activity TriageTask (
+            name: Affecter le ticket
+            type: humanTaskCreate
+            humanTask {
+                definition: @SD_TICKET_TRIAGE
+                taskIdItem: V_TRIAGE_TASK_ID
+                detailsPkItem: APEX$WORKFLOW_DETAIL_PK
+            }
+            overrides {
+                initiatorCanComplete: false
+            }
+            layout {
+                sequence: 30
+            }
+
+            connection (
+                name: Suivant
+                activity {
+                    to: @ApplyAssignment
+                }
+            )
+
+            parameter (
+                name: @P_AGENT_ID
+                value {
+                    staticValue: 0
+                }
+            )
+
+        )
+
+        variable V_APPROVAL_OUTCOME (
+            label {
+                label: Decision demandeur
+            }
+        )
+
+        variable V_APPROVAL_TASK_ID (
+            label {
+                label: Tache validation
+            }
+            parameter {
+                dataType: number
+            }
+        )
+
+        variable V_PROCESSING_TASK_ID (
+            label {
+                label: Tache traitement
+            }
+            parameter {
+                dataType: number
+            }
+        )
+
+        variable V_TRIAGE_TASK_ID (
+            label {
+                label: Tache affectation
+            }
+            parameter {
+                dataType: number
+            }
+        )
+
+        participant (
+            name: Equipe Service Desk
+            value {
+                type: expression
+                plsqlExpression: sd_workflow_api.admin_usernames
+            }
+        )
+
+        participant (
+            name: Administrateurs Service Desk
+            type: admin
+            value {
+                type: expression
+                plsqlExpression: sd_workflow_api.admin_usernames
+            }
+        )
+
+    )
+
+)

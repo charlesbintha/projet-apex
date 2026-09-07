@@ -1,0 +1,373 @@
+page 11 (
+    name: Nouveau ticket
+    alias: NOUVEAU-TICKET
+    title: Nouveau ticket - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        warnOnUnsavedChanges: false
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region new-ticket-breadcrumb (
+        name: Creer un ticket
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useRegionTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region new-ticket-form (
+        name: Informations de la demande
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+            cssClasses: sd-form-region
+        }
+    )
+
+    pageItem P11_CATEGORY_ID (
+        type: selectList
+        label {
+            label: Categorie
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select category_name d, category_id r from sd_categories where is_active = 'Y' order by display_order, category_name
+            displayExtraValues: false
+            nullDisplayValue: Selectionner une categorie
+        }
+        layout {
+            sequence: 40
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            columnSpan: 6
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_DESCRIPTION (
+        type: textarea
+        label {
+            label: Description detaillee
+            alignment: left
+        }
+        settings {
+            charCounter: true
+        }
+        layout {
+            sequence: 30
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            columnSpan: 12
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+            width: 60
+            height: 7
+        }
+        validation {
+            valueRequired: true
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_PRIORITY_CODE (
+        type: selectList
+        label {
+            label: Priorite
+            alignment: left
+        }
+        lov {
+            type: staticValues
+            staticValues: STATIC2:Faible;LOW,Moyenne;MEDIUM,Haute;HIGH,Urgente;URGENT
+            displayExtraValues: false
+            displayNullValue: false
+        }
+        layout {
+            sequence: 50
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: MEDIUM
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_REQUESTER_EMAIL (
+        type: textField
+        label {
+            label: Adresse electronique
+            alignment: left
+        }
+        settings {
+            subtype: email
+        }
+        layout {
+            sequence: 70
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+            width: 40
+            valuePlaceholder: nom@entreprise.sn
+        }
+        validation {
+            valueRequired: true
+            maxLength: 255
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_REQUESTER_NAME (
+        type: textField
+        label {
+            label: Nom du demandeur
+            alignment: left
+        }
+        layout {
+            sequence: 60
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            columnSpan: 6
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+            width: 40
+        }
+        validation {
+            valueRequired: true
+            maxLength: 150
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_SUBJECT (
+        type: textField
+        label {
+            label: Objet
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @new-ticket-form
+            slot: regionBody
+            alignment: left
+            columnSpan: 12
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+            width: 60
+        }
+        validation {
+            valueRequired: true
+            maxLength: 200
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P11_TICKET_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            region: @new-ticket-form
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Annuler
+        layout {
+            sequence: 10
+            region: @new-ticket-breadcrumb
+            slot: previous
+        }
+        appearance {
+            buttonTemplate: @/icon
+            templateOptions: [
+                #DEFAULT#
+            ]
+            icon: fa-arrow-left
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 10
+                clearCache: 10
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button create-ticket (
+        buttonName: CREATE_TICKET
+        label: Creer le ticket
+        layout {
+            sequence: 20
+            region: @new-ticket-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-plus
+        }
+    )
+
+    process create-ticket-process (
+        name: Creer le ticket
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  :P11_TICKET_ID := sd_ticket_api.create_ticket(
+                    p_subject         => :P11_SUBJECT,
+                    p_description     => :P11_DESCRIPTION,
+                    p_category_id     => :P11_CATEGORY_ID,
+                    p_priority_code   => :P11_PRIORITY_CODE,
+                    p_requester_name  => :P11_REQUESTER_NAME,
+                    p_requester_email => :P11_REQUESTER_EMAIL,
+                    p_created_by      => :APP_USER
+                  );
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Le ticket a ete cree avec succes.
+        }
+        advanced {
+            executionMappingIdentifier: 102011000000040
+        }
+        serverSideCondition {
+            whenButtonPressed: @create-ticket
+        }
+    )
+
+    process start-ticket-lifecycle-workflow (
+        name: Demarrer le cycle de vie du ticket
+        type: workflow
+        workflow {
+            definition: @SD_TICKET_LIFECYCLE
+            detailsPkItem: P11_TICKET_ID
+        }
+        execution {
+            sequence: 20
+        }
+        advanced {
+            executionMappingIdentifier: 102011000000041
+        }
+        serverSideCondition {
+            whenButtonPressed: @create-ticket
+        }
+    )
+
+    branch (
+        name: Ouvrir le ticket cree
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 20
+                items: {
+                    P20_TICKET_ID: &P11_TICKET_ID.
+                }
+                clearCache: 20
+            }
+        }
+        serverSideCondition {
+            whenButtonPressed: @create-ticket
+        }
+    )
+
+)

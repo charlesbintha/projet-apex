@@ -1,0 +1,350 @@
+page 32 (
+    name: Suivi des workflows
+    alias: SUIVI-WORKFLOWS
+    title: Suivi des workflows - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+        warnOnUnsavedChanges: false
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region workflow-diagram (
+        name: Diagramme de l'instance
+        type: workflowDiagram
+        layout {
+            sequence: 30
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P32_WORKFLOW_ID
+        }
+        settings {
+            workflowId: P32_WORKFLOW_ID
+        }
+    )
+
+    region workflow-instances (
+        name: Instances du workflow
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select workflow_id,
+                       workflow_def_name,
+                       title,
+                       initiator,
+                       state_code,
+                       created_on,
+                       last_updated_on,
+                       apex_page.get_url(
+                         p_page=>32,
+                         p_clear_cache=>'32',
+                         p_items=>'P32_WORKFLOW_ID',
+                         p_values=>workflow_id
+                       ) detail_url
+                  from table(apex_workflow.get_workflows(
+                         p_context=>'MY_WORKFLOWS',
+                         p_application_id=>:APP_ID
+                       ))
+                 order by created_on desc
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--noPadding
+            ]
+            cssClasses: sd-report-region
+        }
+        pagination {
+            type: rowRangesXToYOfZ
+        }
+        performance {
+            maxRowsToProcess: 1000000
+        }
+        messages {
+            whenNoDataFound: Aucune instance de workflow disponible.
+        }
+        download {
+            formats: [
+                csv
+                excel
+                pdf
+            ]
+            sendAsEmail: false
+        }
+        advanced {
+            savedReportMappingIdentifier: 102032000000011
+        }
+
+        column CREATED_ON (
+            type: plainText
+            heading {
+                heading: Cree le
+            }
+            layout {
+                sequence: 60
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+            source {
+                dataType: DATE
+            }
+            advanced {
+                endUserAlias: F
+            }
+        )
+
+        column DETAIL_URL (
+            type: hidden
+            heading {
+                heading: Lien
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: H
+            }
+        )
+
+        column INITIATOR (
+            type: plainText
+            heading {
+                heading: Initie par
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column LAST_UPDATED_ON (
+            type: plainText
+            heading {
+                heading: Mis a jour le
+            }
+            layout {
+                sequence: 70
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+            source {
+                dataType: DATE
+            }
+            advanced {
+                endUserAlias: G
+            }
+        )
+
+        column STATE_CODE (
+            type: plainText
+            heading {
+                heading: Etat
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: E
+            }
+        )
+
+        column TITLE (
+            type: link
+            heading {
+                heading: Instance
+            }
+            layout {
+                sequence: 30
+            }
+            link {
+                target: {
+                    type: url
+                    url: #DETAIL_URL#
+                }
+                linkText: #TITLE#
+                linkAttributes: class="sd-ticket-link"
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column WORKFLOW_DEF_NAME (
+            type: plainText
+            heading {
+                heading: Workflow
+            }
+            layout {
+                sequence: 20
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: B
+            }
+        )
+
+        column WORKFLOW_ID (
+            type: hidden
+            heading {
+                heading: ID
+            }
+            layout {
+                sequence: 10
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: A
+            }
+        )
+
+        page {
+            borderWidth: 0.5
+            borderColor: #666666
+        }
+
+        savedReport 102032 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn CREATED_ON (
+                sequence: 5
+            )
+
+            displayColumn INITIATOR (
+                sequence: 3
+            )
+
+            displayColumn LAST_UPDATED_ON (
+                sequence: 6
+            )
+
+            displayColumn STATE_CODE (
+                sequence: 4
+            )
+
+            displayColumn TITLE (
+                sequence: 2
+            )
+
+            displayColumn WORKFLOW_DEF_NAME (
+                sequence: 1
+            )
+
+        )
+
+    )
+
+    region workflows-breadcrumb (
+        name: Suivi des workflows
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useRegionTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P32_WORKFLOW_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            slot: body
+        }
+        sessionState {
+            storage: request
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+        }
+    )
+
+    button my-tasks (
+        buttonName: MY_TASKS
+        label: Mes taches
+        layout {
+            sequence: 10
+            region: @workflows-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-clipboard-check-alt
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 30
+                clearCache: 30
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+)
+

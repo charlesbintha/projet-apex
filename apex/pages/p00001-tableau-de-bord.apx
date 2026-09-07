@@ -1,0 +1,566 @@
+page 1 (
+    name: Tableau de bord
+    alias: TABLEAU-DE-BORD
+    title: Tableau de bord - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+    }
+
+    region dashboard-breadcrumb (
+        name: Fil d'Ariane
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useBreadcrumbTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region sd-chart-priority (
+        name: Tickets par priorite
+        type: chart
+        layout {
+            sequence: 30
+            slot: body
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @/standard
+            templateOptions: #DEFAULT#
+            cssClasses: sd-chart-region
+        }
+        chartLayout {
+            height: 320
+        }
+        animation {
+            onDisplay: alphaFade
+        }
+        tooltip {
+            showSeriesName: false
+        }
+        legend {
+            show: false
+        }
+
+        series tickets-par-priorite (
+            name: Tickets
+            execution {
+                sequence: 10
+            }
+            source {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select case priority_code
+                             when 'LOW' then 'Faible'
+                             when 'MEDIUM' then 'Moyenne'
+                             when 'HIGH' then 'Haute'
+                             when 'URGENT' then 'Urgente'
+                           end label,
+                           count(*) value,
+                           case priority_code
+                             when 'LOW' then '#16A34A'
+                             when 'MEDIUM' then '#2563EB'
+                             when 'HIGH' then '#F59E0B'
+                             when 'URGENT' then '#DC2626'
+                           end color,
+                           apex_page.get_url(
+                             p_page        => 10,
+                             p_clear_cache => '10',
+                             p_items       => 'P10_PRIORITY_CODE',
+                             p_values      => priority_code) link
+                      from sd_tickets
+                     group by priority_code
+                     order by decode(priority_code,
+                       'LOW', 1, 'MEDIUM', 2, 'HIGH', 3, 'URGENT', 4)
+                    ```
+            }
+            columnMapping {
+                label: LABEL
+                value: VALUE
+            }
+            appearance {
+                color: &COLOR.
+            }
+            link {
+                type: redirectUrl
+                targetUrl: &LINK.
+            }
+        )
+
+        axis x (
+            name: x
+            minorTicks {
+                show: false
+            }
+        )
+
+        axis y (
+            name: y
+            title: Nombre de tickets
+            value {
+                format: decimal
+                decimalPlaces: 0
+                formatScaling: none
+            }
+            minorTicks {
+                show: false
+            }
+        )
+
+    )
+
+    region sd-chart-status (
+        name: Tickets par statut
+        type: chart
+        layout {
+            sequence: 20
+            slot: body
+            columnSpan: 6
+        }
+        appearance {
+            template: @/standard
+            templateOptions: #DEFAULT#
+            cssClasses: sd-chart-region
+        }
+        chart {
+            type: donut
+        }
+        chartLayout {
+            height: 320
+        }
+        value {
+            formatScaling: none
+        }
+        animation {
+            onDisplay: alphaFade
+        }
+        tooltip {
+            showSeriesName: false
+        }
+
+        series tickets-par-statut (
+            name: Tickets
+            execution {
+                sequence: 10
+            }
+            source {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select case status_code
+                             when 'NEW' then 'Nouveau'
+                             when 'ASSIGNED' then 'Affecte'
+                             when 'IN_PROGRESS' then 'En cours'
+                             when 'RESOLVED' then 'Resolu'
+                             when 'CLOSED' then 'Ferme'
+                           end label,
+                           count(*) value,
+                           case status_code
+                             when 'NEW' then '#64748B'
+                             when 'ASSIGNED' then '#2563EB'
+                             when 'IN_PROGRESS' then '#F59E0B'
+                             when 'RESOLVED' then '#16A34A'
+                             when 'CLOSED' then '#475569'
+                           end color,
+                           apex_page.get_url(
+                             p_page        => 10,
+                             p_clear_cache => '10',
+                             p_items       => 'P10_STATUS_CODE',
+                             p_values      => status_code) link
+                      from sd_tickets
+                     group by status_code
+                     order by decode(status_code,
+                       'NEW', 1, 'ASSIGNED', 2, 'IN_PROGRESS', 3, 'RESOLVED', 4, 'CLOSED', 5)
+                    ```
+            }
+            columnMapping {
+                label: LABEL
+                value: VALUE
+            }
+            appearance {
+                color: &COLOR.
+            }
+            link {
+                type: redirectUrl
+                targetUrl: &LINK.
+            }
+        )
+
+    )
+
+    region sd-dashboard-kpis (
+        name: Indicateurs cles
+        type: dynamicContent
+        source {
+            plsqlFunctionBody:
+                ```plsql
+                declare
+                  l_html             clob;
+                  l_open             number;
+                  l_urgent           number;
+                  l_unassigned       number;
+                  l_resolved_today   number;
+                  l_open_url         varchar2(4000);
+                  l_urgent_url       varchar2(4000);
+                  l_unassigned_url   varchar2(4000);
+                  l_resolved_url     varchar2(4000);
+                begin
+                  select count(case when status_code not in ('RESOLVED', 'CLOSED') then 1 end),
+                         count(case when priority_code = 'URGENT'
+                                          and status_code not in ('RESOLVED', 'CLOSED') then 1 end),
+                         count(case when assigned_agent_id is null
+                                          and status_code not in ('RESOLVED', 'CLOSED') then 1 end),
+                         count(case when status_code in ('RESOLVED', 'CLOSED')
+                                          and cast(resolved_at as date) >= trunc(sysdate)
+                                          and cast(resolved_at as date) < trunc(sysdate) + 1 then 1 end)
+                    into l_open, l_urgent, l_unassigned, l_resolved_today
+                    from sd_tickets;
+                
+                  l_open_url := apex_page.get_url(
+                    p_page        => 10,
+                    p_clear_cache => '10',
+                    p_items       => 'P10_STATUS_SCOPE',
+                    p_values      => 'OPEN');
+                
+                  l_urgent_url := apex_page.get_url(
+                    p_page        => 10,
+                    p_clear_cache => '10',
+                    p_items       => 'P10_PRIORITY_CODE',
+                    p_values      => 'URGENT');
+                
+                  l_unassigned_url := apex_page.get_url(
+                    p_page        => 10,
+                    p_clear_cache => '10',
+                    p_items       => 'P10_UNASSIGNED',
+                    p_values      => 'Y');
+                
+                  l_resolved_url := apex_page.get_url(
+                    p_page        => 10,
+                    p_clear_cache => '10',
+                    p_items       => 'P10_RESOLVED_TODAY',
+                    p_values      => 'Y');
+                
+                  l_html := '<div class="sd-kpi-grid">' ||
+                    '<a class="sd-kpi-card sd-kpi-open" href="' ||
+                      apex_escape.html_attribute(l_open_url) ||
+                      '" aria-label="Afficher les tickets ouverts">' ||
+                      '<span class="sd-kpi-icon fa fa-folder-open-o" aria-hidden="true"></span>' ||
+                      '<span class="sd-kpi-content"><strong>' || l_open ||
+                      '</strong><span>Tickets ouverts</span></span></a>' ||
+                
+                    '<a class="sd-kpi-card sd-kpi-urgent" href="' ||
+                      apex_escape.html_attribute(l_urgent_url) ||
+                      '" aria-label="Afficher les tickets urgents">' ||
+                      '<span class="sd-kpi-icon fa fa-exclamation-triangle" aria-hidden="true"></span>' ||
+                      '<span class="sd-kpi-content"><strong>' || l_urgent ||
+                      '</strong><span>Tickets urgents</span></span></a>' ||
+                
+                    '<a class="sd-kpi-card sd-kpi-unassigned" href="' ||
+                      apex_escape.html_attribute(l_unassigned_url) ||
+                      '" aria-label="Afficher les tickets non affectes">' ||
+                      '<span class="sd-kpi-icon fa fa-user-times" aria-hidden="true"></span>' ||
+                      '<span class="sd-kpi-content"><strong>' || l_unassigned ||
+                      '</strong><span>Tickets non affectes</span></span></a>' ||
+                
+                    '<a class="sd-kpi-card sd-kpi-resolved" href="' ||
+                      apex_escape.html_attribute(l_resolved_url) ||
+                      '" aria-label="Afficher les tickets resolus aujourd hui">' ||
+                      '<span class="sd-kpi-icon fa fa-check-circle" aria-hidden="true"></span>' ||
+                      '<span class="sd-kpi-content"><strong>' || l_resolved_today ||
+                      '</strong><span>Resolus aujourd&#39;hui</span></span></a>' ||
+                    '</div>';
+                
+                  return l_html;
+                end;
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: body
+        }
+        appearance {
+            template: @/blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region sd-recent-tickets (
+        name: Cinq tickets les plus recents
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select ticket_id,
+                       ticket_number,
+                       subject,
+                       category_name,
+                       priority_label,
+                       status_label,
+                       nvl(assigned_agent_name, 'Non affecte') assigned_agent_name,
+                       created_at,
+                       apex_page.get_url(
+                         p_page        => 20,
+                         p_clear_cache => '20',
+                         p_items       => 'P20_TICKET_ID',
+                         p_values      => ticket_id) detail_url
+                  from sd_ticket_overview_v
+                 order by created_at desc
+                 fetch first 5 rows only
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--noPadding
+            ]
+            cssClasses: sd-report-region
+        }
+        pagination {
+            type: rowRangesXToYOfZ
+        }
+        performance {
+            maxRowsToProcess: 5
+        }
+        messages {
+            whenNoDataFound: Aucun ticket disponible.
+        }
+        download {
+            formats: [
+                csv
+                excel
+            ]
+            sendAsEmail: false
+        }
+        advanced {
+            savedReportMappingIdentifier: 102001000000041
+        }
+
+        column ASSIGNED_AGENT_NAME (
+            type: plainText
+            heading {
+                heading: Agent
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: G
+            }
+        )
+
+        column CATEGORY_NAME (
+            type: plainText
+            heading {
+                heading: Categorie
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Cree le
+            }
+            layout {
+                sequence: 80
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+            source {
+                dataType: DATE
+            }
+            advanced {
+                endUserAlias: H
+            }
+        )
+
+        column DETAIL_URL (
+            type: hidden
+            heading {
+                heading: URL detail
+            }
+            layout {
+                sequence: 90
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: I
+            }
+        )
+
+        column PRIORITY_LABEL (
+            type: plainText
+            heading {
+                heading: Priorite
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: E
+            }
+        )
+
+        column STATUS_LABEL (
+            type: plainText
+            heading {
+                heading: Statut
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: F
+            }
+        )
+
+        column SUBJECT (
+            type: plainText
+            heading {
+                heading: Objet
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column TICKET_ID (
+            type: hidden
+            heading {
+                heading: ID
+            }
+            layout {
+                sequence: 10
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: A
+            }
+        )
+
+        column TICKET_NUMBER (
+            type: link
+            heading {
+                heading: Ticket
+            }
+            layout {
+                sequence: 20
+            }
+            link {
+                target: {
+                    type: url
+                    url: #DETAIL_URL#
+                }
+                linkText: #TICKET_NUMBER#
+                linkAttributes: class="sd-ticket-link"
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: B
+            }
+        )
+
+        page {
+            borderWidth: 0.5
+            borderColor: #666666
+        }
+
+        savedReport 102001 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn ASSIGNED_AGENT_NAME (
+                sequence: 6
+            )
+
+            displayColumn CATEGORY_NAME (
+                sequence: 3
+            )
+
+            displayColumn CREATED_AT (
+                sequence: 7
+            )
+
+            displayColumn PRIORITY_LABEL (
+                sequence: 4
+            )
+
+            displayColumn STATUS_LABEL (
+                sequence: 5
+            )
+
+            displayColumn SUBJECT (
+                sequence: 2
+            )
+
+            displayColumn TICKET_NUMBER (
+                sequence: 1
+            )
+
+        )
+
+    )
+
+)
+

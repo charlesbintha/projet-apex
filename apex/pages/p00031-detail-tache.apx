@@ -1,0 +1,698 @@
+page 31 (
+    name: Detail de la tache
+    alias: DETAIL-TACHE
+    title: Detail de la tache - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+        warnOnUnsavedChanges: false
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region task-actions (
+        name: Actions
+        type: staticContent
+        layout {
+            sequence: 50
+            slot: body
+        }
+        appearance {
+            template: @/buttons-container
+            templateOptions: [
+                #DEFAULT#
+                t-ButtonRegion--stickToBottom
+            ]
+        }
+    )
+
+    region task-assignment (
+        name: Choisir l'agent
+        type: staticContent
+        layout {
+            sequence: 30
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+            cssClasses: sd-form-region
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from apex_tasks where task_id = :P31_TASK_ID and task_def_static_id = 'SD_TICKET_TRIAGE' and state_code not in ('COMPLETED','CANCELED','EXPIRED')
+        }
+    )
+
+    region task-detail-breadcrumb (
+        name: Detail de la tache
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useRegionTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region task-resolution (
+        name: Resolution
+        type: staticContent
+        layout {
+            sequence: 40
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+            cssClasses: sd-form-region
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from apex_tasks where task_id = :P31_TASK_ID and task_def_static_id = 'SD_TICKET_PROCESSING' and state_code not in ('COMPLETED','CANCELED','EXPIRED')
+        }
+    )
+
+    region task-ticket-summary (
+        name: Tache et ticket
+        type: dynamicContent
+        source {
+            plsqlFunctionBody:
+                ```plsql
+                declare
+                  l_task_def_name varchar2(255);
+                  l_subject varchar2(4000);
+                  l_state varchar2(100);
+                  l_task_type varchar2(100);
+                  l_owner varchar2(255);
+                  l_due_on timestamp with time zone;
+                  l_ticket_id number;
+                  l_ticket sd_ticket_overview_v%rowtype;
+                begin
+                  select d.name, t.subject, t.state, t.task_type_code, t.actual_owner, t.due_on, to_number(t.detail_pk)
+                    into l_task_def_name, l_subject, l_state, l_task_type, l_owner, l_due_on, l_ticket_id
+                    from apex_tasks t
+                    join apex_appl_taskdefs d on d.task_def_id=t.task_def_id
+                   where t.task_id = :P31_TASK_ID;
+                
+                  select * into l_ticket from sd_ticket_overview_v where ticket_id = l_ticket_id;
+                
+                  return '<article class="sd-detail-card"><header class="sd-detail-header"><div>' ||
+                         '<span class="sd-detail-eyebrow">' || apex_escape.html(l_task_def_name) || '</span>' ||
+                         '<h2>' || apex_escape.html(l_subject) || '</h2></div>' ||
+                         '<span class="sd-status-badge ' || apex_escape.html_attribute(l_ticket.status_css_class) || '">' ||
+                         apex_escape.html(l_ticket.status_label) || '</span></header>' ||
+                         '<dl class="sd-detail-grid">' ||
+                         '<div><dt>Ticket</dt><dd><a class="sd-ticket-link" href="' ||
+                         apex_page.get_url(p_page=>20,p_clear_cache=>'20',p_items=>'P20_TICKET_ID',p_values=>l_ticket_id) ||
+                         '">' || apex_escape.html(l_ticket.ticket_number) || '</a></dd></div>' ||
+                         '<div><dt>Type</dt><dd>' || apex_escape.html(l_task_type) || '</dd></div>' ||
+                         '<div><dt>Etat de la tache</dt><dd>' || apex_escape.html(l_state) || '</dd></div>' ||
+                         '<div><dt>Proprietaire</dt><dd>' || apex_escape.html(nvl(l_owner,'Non reclamee')) || '</dd></div>' ||
+                         '<div><dt>Demandeur</dt><dd>' || apex_escape.html(l_ticket.requester_name) || '</dd></div>' ||
+                         '<div><dt>Echeance</dt><dd>' || nvl(to_char(l_due_on,'DD/MM/YYYY HH24:MI'),'-') || '</dd></div>' ||
+                         '<div class="sd-detail-wide"><dt>Description</dt><dd class="sd-description">' ||
+                         apex_escape.html(dbms_lob.substr(l_ticket.description,32767,1)) || '</dd></div></dl></article>';
+                exception when no_data_found then
+                  return '<div class="t-Alert t-Alert--warning">Tache ou ticket introuvable.</div>';
+                end;
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: body
+        }
+        appearance {
+            template: @/blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P31_AGENT_ID (
+        type: selectList
+        label {
+            label: Agent
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select full_name || ' - ' || apex_username d, agent_id r from sd_agents where is_active = 'Y' and role_code = 'AGENT' order by full_name
+            displayExtraValues: false
+            nullDisplayValue: Selectionner un agent
+        }
+        layout {
+            sequence: 10
+            region: @task-assignment
+            slot: regionBody
+            alignment: left
+            columnSpan: 12
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P31_PROCESS_PARAM_NAME (
+        type: hidden
+        layout {
+            sequence: 30
+            slot: body
+        }
+        default {
+            type: static
+            staticValue: P_RESOLUTION_NOTE
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P31_RESOLUTION_NOTE (
+        type: textarea
+        label {
+            label: Note de resolution
+            alignment: left
+        }
+        settings {
+            charCounter: true
+        }
+        layout {
+            sequence: 10
+            region: @task-resolution
+            slot: regionBody
+            alignment: left
+            columnSpan: 12
+        }
+        appearance {
+            template: @/required
+            templateOptions: #DEFAULT#
+            width: 60
+            height: 6
+        }
+        validation {
+            maxLength: 4000
+        }
+    )
+
+    pageItem P31_TASK_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            slot: body
+        }
+        sessionState {
+            storage: request
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+        }
+    )
+
+    pageItem P31_TRIAGE_PARAM_NAME (
+        type: hidden
+        layout {
+            sequence: 20
+            slot: body
+        }
+        default {
+            type: static
+            staticValue: P_AGENT_ID
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    button approve (
+        buttonName: APPROVE
+        label: Approuver la resolution
+        layout {
+            sequence: 50
+            region: @task-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-check
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: expression
+            plsqlExpression:
+                ```plsql
+                apex_human_task.is_allowed (
+                  p_task_id => :P31_TASK_ID,
+                  p_operation => apex_human_task.c_task_op_approve )
+                ```
+        }
+    )
+
+    button back (
+        buttonName: BACK
+        label: Retour aux taches
+        layout {
+            sequence: 10
+            region: @task-actions
+            slot: previous
+        }
+        appearance {
+            buttonTemplate: @/icon
+            templateOptions: [
+                #DEFAULT#
+            ]
+            icon: fa-arrow-left
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 30
+                clearCache: 30
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button claim (
+        buttonName: CLAIM
+        label: Reclamer la tache
+        layout {
+            sequence: 20
+            region: @task-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-hand-paper-o
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: expression
+            plsqlExpression:
+                ```plsql
+                apex_human_task.is_allowed (
+                  p_task_id => :P31_TASK_ID,
+                  p_operation => apex_human_task.c_task_op_claim )
+                ```
+        }
+    )
+
+    button complete-processing (
+        buttonName: COMPLETE_PROCESSING
+        label: Terminer le traitement
+        layout {
+            sequence: 40
+            region: @task-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-check
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from apex_tasks where task_id=:P31_TASK_ID and task_def_static_id='SD_TICKET_PROCESSING' and actual_owner=:APP_USER and state_code not in ('COMPLETED','CANCELED','EXPIRED')
+        }
+    )
+
+    button complete-triage (
+        buttonName: COMPLETE_TRIAGE
+        label: Valider l'affectation
+        layout {
+            sequence: 30
+            region: @task-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-check
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from apex_tasks where task_id=:P31_TASK_ID and task_def_static_id='SD_TICKET_TRIAGE' and actual_owner=:APP_USER and state_code not in ('COMPLETED','CANCELED','EXPIRED')
+        }
+    )
+
+    button reject (
+        buttonName: REJECT
+        label: Refuser la resolution
+        layout {
+            sequence: 60
+            region: @task-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            templateOptions: [
+                #DEFAULT#
+                t-Button--danger
+                t-Button--link
+                t-Button--iconLeft
+            ]
+            icon: fa-times-circle-o
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: expression
+            plsqlExpression:
+                ```plsql
+                apex_human_task.is_allowed (
+                  p_task_id => :P31_TASK_ID,
+                  p_operation => apex_human_task.c_task_op_reject )
+                ```
+        }
+    )
+
+    validation agent-obligatoire (
+        name: Agent obligatoire
+        execution {
+            sequence: 10
+        }
+        validation {
+            type: itemIsNotNull
+            item: P31_AGENT_ID
+        }
+        error {
+            errorMessage: Selectionnez un agent.
+            displayLocation: inlineWithField
+            associatedItem: @P31_AGENT_ID
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-triage
+        }
+    )
+
+    validation note-obligatoire (
+        name: Note obligatoire
+        execution {
+            sequence: 20
+        }
+        validation {
+            type: itemIsNotNull
+            item: P31_RESOLUTION_NOTE
+        }
+        error {
+            errorMessage: Saisissez la note de resolution.
+            displayLocation: inlineWithField
+            associatedItem: @P31_RESOLUTION_NOTE
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-processing
+        }
+    )
+
+    process approve-task (
+        name: Approuver
+        type: humanTaskManage
+        humanTask {
+            taskIdItem: P31_TASK_ID
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Resolution approuvee.
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000086
+        }
+        serverSideCondition {
+            whenButtonPressed: @approve
+        }
+    )
+
+    process charger-les-parametres-de-la-tache (
+        name: Charger les parametres de la tache
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  select nullif(max(case when param_static_id='P_AGENT_ID' then param_value end), '0'),
+                         nullif(max(case when param_static_id='P_RESOLUTION_NOTE' then param_value end), '#NOT_SET#')
+                    into :P31_AGENT_ID, :P31_RESOLUTION_NOTE
+                    from apex_task_parameters
+                   where task_id=:P31_TASK_ID;
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000080
+        }
+    )
+
+    process claim-task (
+        name: Reclamer
+        type: humanTaskManage
+        action {
+            type: claim
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Tache reclamee.
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000085
+        }
+        serverSideCondition {
+            whenButtonPressed: @claim
+        }
+    )
+
+    process complete-processing-task (
+        name: Completer traitement
+        type: humanTaskManage
+        action {
+            type: completeWithoutOutcome
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+        }
+        execution {
+            sequence: 20
+        }
+        successMessage {
+            successMessage: Traitement termine.
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000084
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-processing
+        }
+    )
+
+    process complete-triage-task (
+        name: Completer affectation
+        type: humanTaskManage
+        action {
+            type: completeWithoutOutcome
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+        }
+        execution {
+            sequence: 20
+        }
+        successMessage {
+            successMessage: Affectation validee.
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000082
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-triage
+        }
+    )
+
+    process reject-task (
+        name: Refuser
+        type: humanTaskManage
+        action {
+            type: reject
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Resolution refusee.
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000087
+        }
+        serverSideCondition {
+            whenButtonPressed: @reject
+        }
+    )
+
+    process save-agent-param (
+        name: Enregistrer agent
+        type: humanTaskManage
+        action {
+            type: updateParam
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+            paramItem: P31_TRIAGE_PARAM_NAME
+            newValueItem: P31_AGENT_ID
+        }
+        execution {
+            sequence: 10
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000081
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-triage
+        }
+    )
+
+    process save-resolution-param (
+        name: Enregistrer resolution
+        type: humanTaskManage
+        action {
+            type: updateParam
+        }
+        humanTask {
+            taskIdItem: P31_TASK_ID
+            paramItem: P31_PROCESS_PARAM_NAME
+            newValueItem: P31_RESOLUTION_NOTE
+        }
+        execution {
+            sequence: 10
+        }
+        error {
+            errorMessage: #SQLERRM_TEXT#
+        }
+        advanced {
+            executionMappingIdentifier: 102031000000083
+        }
+        serverSideCondition {
+            whenButtonPressed: @complete-processing
+        }
+    )
+
+    branch (
+        name: Rester apres reclamation
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 31
+                items: {
+                    P31_TASK_ID: &P31_TASK_ID.
+                }
+                clearCache: 31
+            }
+        }
+        serverSideCondition {
+            whenButtonPressed: @claim
+        }
+    )
+
+    branch (
+        name: Retour apres action
+        execution {
+            sequence: 20
+        }
+        behavior {
+            target: {
+                page: 30
+                clearCache: 30
+            }
+        }
+    )
+
+)

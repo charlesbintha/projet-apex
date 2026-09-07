@@ -1,0 +1,9 @@
+{
+  "app" : {
+    "name" : "Demande Interne TESTCL",
+    "alias" : "DEMANDE-INTERNE-TESTCL",
+    "databaseSession" : {
+      "parsingSchema" : "TESTCL"
+    }
+  }
+}

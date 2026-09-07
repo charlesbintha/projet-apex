@@ -1,0 +1,42 @@
+.DS_Store
+Thumbs.db
+
+# Outils installés localement
+sqlcl/
+
+# Secrets et informations de connexion
+.env
+.env.*
+!.env.example
+Wallet_*/
+wallet/
+wallets/
+*wallet*.zip
+*.pem
+*.key
+*.p12
+*.sso
+*.jks
+
+# Journaux et fichiers temporaires
+*.log
+*.tmp
+*.swp
+.idea/
+.vscode/settings.json
+
+# Les preuves volumineuses ou sensibles restent hors de Git
+test-evidence/*
+!test-evidence/.gitkeep
+
+# Export APEX Full : peut contenir des données d'exécution
+apex/apex-exports/full/
+
+# Archives brutes conservées localement avant assainissement
+apex/apex-exports/raw/
+
+# Composants de workspace propres à un environnement
+apex/workspace-components/
+
+# Paquets de livraison régénérables
+dist/

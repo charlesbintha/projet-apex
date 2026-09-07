@@ -1,0 +1,682 @@
+page 10 (
+    name: Liste des tickets
+    alias: TICKETS
+    title: Liste des tickets - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+        warnOnUnsavedChanges: false
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region ticket-filters (
+        name: Filtres
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--noPadding
+            ]
+            cssClasses: sd-form-region
+        }
+    )
+
+    region tickets-breadcrumb (
+        name: Tickets
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useRegionTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region tickets-report (
+        name: Tous les tickets
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select ticket_id,
+                       ticket_number,
+                       subject,
+                       category_name,
+                       '<span class="sd-priority-badge ' ||
+                         apex_escape.html_attribute(priority_css_class) || '">' ||
+                         apex_escape.html(priority_label) || '</span>' priority,
+                       '<span class="sd-status-badge ' ||
+                         apex_escape.html_attribute(status_css_class) || '">' ||
+                         apex_escape.html(status_label) || '</span>' status,
+                       requester_name,
+                       nvl(assigned_agent_name, 'Non affecte') assigned_agent_name,
+                       created_at,
+                       updated_at,
+                       apex_page.get_url(
+                         p_page        => 20,
+                         p_clear_cache => '20',
+                         p_items       => 'P20_TICKET_ID',
+                         p_values      => ticket_id
+                       ) detail_url
+                  from sd_ticket_overview_v
+                 where (:P10_STATUS_CODE is null or status_code = :P10_STATUS_CODE)
+                   and (:P10_PRIORITY_CODE is null or priority_code = :P10_PRIORITY_CODE)
+                   and (:P10_CATEGORY_ID is null or category_id = :P10_CATEGORY_ID)
+                   and (:P10_ASSIGNED_AGENT_ID is null or assigned_agent_id = :P10_ASSIGNED_AGENT_ID)
+                   and (
+                         :P10_SEARCH is null
+                         or upper(ticket_number) like '%' || upper(trim(:P10_SEARCH)) || '%'
+                         or upper(subject) like '%' || upper(trim(:P10_SEARCH)) || '%'
+                         or upper(requester_name) like '%' || upper(trim(:P10_SEARCH)) || '%'
+                       )
+                   and (
+                         :P10_STATUS_SCOPE is null
+                         or :P10_STATUS_SCOPE <> 'OPEN'
+                         or status_code not in ('RESOLVED', 'CLOSED')
+                       )
+                   and (
+                         :P10_UNASSIGNED is null
+                         or :P10_UNASSIGNED <> 'Y'
+                         or assigned_agent_id is null
+                       )
+                   and (
+                         :P10_RESOLVED_TODAY is null
+                         or :P10_RESOLVED_TODAY <> 'Y'
+                         or (
+                              status_code in ('RESOLVED', 'CLOSED')
+                              and cast(resolved_at as date) >= trunc(sysdate)
+                              and cast(resolved_at as date) < trunc(sysdate) + 1
+                            )
+                       )
+                 order by created_at desc
+                ```
+            pageItemsToSubmit: [
+                P10_SEARCH
+                P10_STATUS_CODE
+                P10_PRIORITY_CODE
+                P10_CATEGORY_ID
+                P10_ASSIGNED_AGENT_ID
+                P10_STATUS_SCOPE
+                P10_UNASSIGNED
+                P10_RESOLVED_TODAY
+            ]
+        }
+        layout {
+            sequence: 30
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--noPadding
+            ]
+            cssClasses: sd-report-region
+        }
+        pagination {
+            type: rowRangesXToYOfZ
+        }
+        performance {
+            maxRowsToProcess: 1000000
+        }
+        messages {
+            whenNoDataFound: Aucun ticket ne correspond aux filtres.
+        }
+        download {
+            sendAsEmail: false
+        }
+        advanced {
+            savedReportMappingIdentifier: 102010000000031
+        }
+
+        column ASSIGNED_AGENT_NAME (
+            type: plainText
+            heading {
+                heading: Agent affecte
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: H
+            }
+        )
+
+        column CATEGORY_NAME (
+            type: plainText
+            heading {
+                heading: Categorie
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Cree le
+            }
+            layout {
+                sequence: 90
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+            source {
+                dataType: DATE
+            }
+            advanced {
+                endUserAlias: I
+            }
+        )
+
+        column DETAIL_URL (
+            type: hidden
+            heading {
+                heading: Lien detail
+            }
+            layout {
+                sequence: 110
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: K
+            }
+        )
+
+        column PRIORITY (
+            type: plainText
+            heading {
+                heading: Priorite
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: E
+            }
+            security {
+                escapeSpecialChars: false
+            }
+        )
+
+        column REQUESTER_NAME (
+            type: plainText
+            heading {
+                heading: Demandeur
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: G
+            }
+        )
+
+        column STATUS (
+            type: plainText
+            heading {
+                heading: Statut
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: F
+            }
+            security {
+                escapeSpecialChars: false
+            }
+        )
+
+        column SUBJECT (
+            type: plainText
+            heading {
+                heading: Objet
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column TICKET_ID (
+            type: hidden
+            heading {
+                heading: ID
+            }
+            layout {
+                sequence: 10
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: A
+            }
+        )
+
+        column TICKET_NUMBER (
+            type: link
+            heading {
+                heading: Ticket
+            }
+            layout {
+                sequence: 20
+            }
+            link {
+                target: {
+                    type: url
+                    url: #DETAIL_URL#
+                }
+                linkText: #TICKET_NUMBER#
+                linkAttributes: class="sd-ticket-link" aria-label="Ouvrir le ticket #TICKET_NUMBER#"
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: B
+            }
+        )
+
+        column UPDATED_AT (
+            type: plainText
+            heading {
+                heading: Mis a jour le
+            }
+            layout {
+                sequence: 100
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+            source {
+                dataType: DATE
+            }
+            advanced {
+                endUserAlias: J
+            }
+        )
+
+        page {
+            borderWidth: 0.5
+            borderColor: #666666
+        }
+
+        savedReport 102010 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn ASSIGNED_AGENT_NAME (
+                sequence: 7
+            )
+
+            displayColumn CATEGORY_NAME (
+                sequence: 3
+            )
+
+            displayColumn CREATED_AT (
+                sequence: 8
+            )
+
+            displayColumn PRIORITY (
+                sequence: 4
+            )
+
+            displayColumn REQUESTER_NAME (
+                sequence: 6
+            )
+
+            displayColumn STATUS (
+                sequence: 5
+            )
+
+            displayColumn SUBJECT (
+                sequence: 2
+            )
+
+            displayColumn TICKET_NUMBER (
+                sequence: 1
+            )
+
+            displayColumn UPDATED_AT (
+                sequence: 9
+            )
+
+        )
+
+    )
+
+    pageItem P10_ASSIGNED_AGENT_ID (
+        type: selectList
+        label {
+            label: Agent affecte
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select full_name d, agent_id r from sd_agents where is_active = 'Y' order by full_name
+            displayExtraValues: false
+            nullDisplayValue: Tous les agents
+        }
+        layout {
+            sequence: 50
+            region: @ticket-filters
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @/optional-above
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P10_CATEGORY_ID (
+        type: selectList
+        label {
+            label: Categorie
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select category_name d, category_id r from sd_categories where is_active = 'Y' order by display_order, category_name
+            displayExtraValues: false
+            nullDisplayValue: Toutes les categories
+        }
+        layout {
+            sequence: 40
+            region: @ticket-filters
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @/optional-above
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P10_PRIORITY_CODE (
+        type: selectList
+        label {
+            label: Priorite
+            alignment: left
+        }
+        lov {
+            type: staticValues
+            staticValues: STATIC2:Faible;LOW,Moyenne;MEDIUM,Haute;HIGH,Urgente;URGENT
+            displayExtraValues: false
+            nullDisplayValue: Toutes les priorites
+        }
+        layout {
+            sequence: 30
+            region: @ticket-filters
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @/optional-above
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P10_RESOLVED_TODAY (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 80
+            region: @ticket-filters
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P10_SEARCH (
+        type: textField
+        label {
+            label: Recherche
+            alignment: left
+        }
+        settings {
+            subtype: search
+            submitWhenEnterPressed: true
+        }
+        layout {
+            sequence: 10
+            region: @ticket-filters
+            slot: regionBody
+            alignment: left
+            columnSpan: 3
+        }
+        appearance {
+            template: @/optional-above
+            templateOptions: #DEFAULT#
+            width: 30
+            valuePlaceholder: Numero, objet ou demandeur
+        }
+        validation {
+            maxLength: 200
+        }
+    )
+
+    pageItem P10_STATUS_CODE (
+        type: selectList
+        label {
+            label: Statut
+            alignment: left
+        }
+        lov {
+            type: staticValues
+            staticValues: STATIC2:Nouveau;NEW,Affecte;ASSIGNED,En cours;IN_PROGRESS,Resolu;RESOLVED,Ferme;CLOSED
+            displayExtraValues: false
+            nullDisplayValue: Tous les statuts
+        }
+        layout {
+            sequence: 20
+            region: @ticket-filters
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @/optional-above
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P10_STATUS_SCOPE (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 60
+            region: @ticket-filters
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P10_UNASSIGNED (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 70
+            region: @ticket-filters
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    button apply-filters (
+        buttonName: APPLY_FILTERS
+        label: Filtrer
+        layout {
+            sequence: 80
+            region: @ticket-filters
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-filter
+        }
+    )
+
+    button new-ticket (
+        buttonName: NEW_TICKET
+        label: Nouveau ticket
+        layout {
+            sequence: 10
+            region: @tickets-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-plus
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 11
+                clearCache: 11
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button reset-filters (
+        buttonName: RESET_FILTERS
+        label: Reinitialiser
+        layout {
+            sequence: 90
+            region: @ticket-filters
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-undo
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 10
+                clearCache: 10
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process clear-context-filters (
+        name: Retirer les filtres contextuels
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  :P10_STATUS_SCOPE := null;
+                  :P10_UNASSIGNED := null;
+                  :P10_RESOLVED_TODAY := null;
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        advanced {
+            executionMappingIdentifier: 102010000000050
+        }
+        serverSideCondition {
+            whenButtonPressed: @apply-filters
+        }
+    )
+
+)
+

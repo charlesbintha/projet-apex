@@ -1,0 +1,835 @@
+page 20 (
+    name: Detail du ticket
+    alias: DETAIL-TICKET
+    title: Detail du ticket - Service Desk Lite
+    appearance {
+        pageTemplate: @/standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+        warnOnUnsavedChanges: false
+    }
+    css {
+        fileUrls: #APP_FILES#app.css
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region add-ticket-comment (
+        name: Commentaire
+        type: staticContent
+        layout {
+            sequence: 50
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+            cssClasses: sd-form-region
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+    )
+
+    region ticket-actions (
+        name: Affectation
+        type: staticContent
+        layout {
+            sequence: 30
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+            cssClasses: sd-form-region
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and workflow_id is null and status_code in ('NEW', 'ASSIGNED', 'IN_PROGRESS')
+        }
+    )
+
+    region ticket-comments (
+        name: Historique
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select comment_id,
+                       case comment_type when 'PUBLIC' then 'Public' else 'Interne' end comment_type_label,
+                       dbms_lob.substr(comment_text, 4000, 1) comment_text,
+                       created_by,
+                       created_at
+                  from sd_ticket_comments
+                 where ticket_id = :P20_TICKET_ID
+                 order by created_at desc
+                ```
+            pageItemsToSubmit: P20_TICKET_ID
+        }
+        layout {
+            sequence: 40
+            slot: body
+        }
+        appearance {
+            template: @/standard
+            templateOptions: #DEFAULT#
+            cssClasses: sd-report-region
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        reportLayout {
+            numberOfRows: 10
+        }
+        componentAppearance {
+            template: @/standard
+            templateOptions: [
+                #DEFAULT#
+                t-Report--stretch
+                t-Report--rowHighlight
+            ]
+        }
+        pagination {
+            type: nextAndPreviousLinks
+        }
+        messages {
+            whenNoDataFound: Aucun commentaire pour ce ticket.
+        }
+
+        column COMMENT_ID (
+            reportColumnQueryId: 1
+            derivedColumn: N
+            type: hidden
+            layout {
+                sequence: 10
+            }
+        )
+
+        column COMMENT_TEXT (
+            reportColumnQueryId: 3
+            derivedColumn: N
+            heading {
+                heading: Commentaire
+            }
+            layout {
+                sequence: 30
+            }
+            sorting {
+                sortable: false
+            }
+        )
+
+        column COMMENT_TYPE_LABEL (
+            reportColumnQueryId: 2
+            derivedColumn: N
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column CREATED_AT (
+            reportColumnQueryId: 5
+            derivedColumn: N
+            heading {
+                heading: Ajoute le
+            }
+            layout {
+                sequence: 50
+            }
+            appearance {
+                formatMask: DD/MM/YYYY HH24:MI
+            }
+        )
+
+        column CREATED_BY (
+            reportColumnQueryId: 4
+            derivedColumn: N
+            heading {
+                heading: Ajoute par
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+    )
+
+    region ticket-detail (
+        name: Informations du ticket
+        type: dynamicContent
+        source {
+            plsqlFunctionBody:
+                ```plsql
+                declare
+                  l_ticket      sd_ticket_overview_v%rowtype;
+                  l_description varchar2(32767);
+                  l_html        clob;
+                begin
+                  select *
+                    into l_ticket
+                    from sd_ticket_overview_v
+                   where ticket_id = :P20_TICKET_ID;
+                
+                  l_description := dbms_lob.substr(l_ticket.description, 32767, 1);
+                
+                  l_html := '<article class="sd-detail-card">' ||
+                    '<header class="sd-detail-header"><div>' ||
+                      '<span class="sd-detail-eyebrow">' || apex_escape.html(l_ticket.ticket_number) || '</span>' ||
+                      '<h2>' || apex_escape.html(l_ticket.subject) || '</h2></div>' ||
+                      '<span class="sd-status-badge ' || apex_escape.html_attribute(l_ticket.status_css_class) || '">' ||
+                        apex_escape.html(l_ticket.status_label) || '</span></header>' ||
+                
+                    '<dl class="sd-detail-grid">' ||
+                      '<div><dt>Categorie</dt><dd>' || apex_escape.html(l_ticket.category_name) || '</dd></div>' ||
+                      '<div><dt>Priorite</dt><dd><span class="sd-priority-badge ' ||
+                        apex_escape.html_attribute(l_ticket.priority_css_class) || '">' ||
+                        apex_escape.html(l_ticket.priority_label) || '</span></dd></div>' ||
+                      '<div><dt>Demandeur</dt><dd>' || apex_escape.html(l_ticket.requester_name) || '</dd></div>' ||
+                      '<div><dt>Courriel</dt><dd>' || apex_escape.html(l_ticket.requester_email) || '</dd></div>' ||
+                      '<div><dt>Agent affecte</dt><dd>' ||
+                        apex_escape.html(nvl(l_ticket.assigned_agent_name, 'Non affecte')) || '</dd></div>' ||
+                      '<div><dt>Cree le</dt><dd>' || to_char(l_ticket.created_at, 'DD/MM/YYYY HH24:MI') || '</dd></div>' ||
+                      '<div><dt>Derniere mise a jour</dt><dd>' ||
+                        nvl(to_char(l_ticket.updated_at, 'DD/MM/YYYY HH24:MI'), '-' ) || '</dd></div>' ||
+                      '<div><dt>Resolu le</dt><dd>' ||
+                        nvl(to_char(l_ticket.resolved_at, 'DD/MM/YYYY HH24:MI'), '-' ) || '</dd></div>' ||
+                      '<div class="sd-detail-wide"><dt>Description</dt><dd class="sd-description">' ||
+                        apex_escape.html(l_description) || '</dd></div>' ||
+                    '</dl></article>';
+                
+                  return l_html;
+                exception
+                  when no_data_found then
+                    return '<div class="t-Alert t-Alert--warning">Ticket introuvable.</div>';
+                end;
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: body
+        }
+        appearance {
+            template: @/blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region ticket-detail-breadcrumb (
+        name: Ticket &P20_TICKET_NUMBER.
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @/title-bar
+            templateOptions: [
+                #DEFAULT#
+                t-BreadcrumbRegion--useRegionTitle
+            ]
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region ticket-region-selector (
+        name: Navigation du ticket
+        type: regionDisplaySelector
+        layout {
+            sequence: 25
+            slot: body
+        }
+        appearance {
+            template: @/blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+        settings {
+            includeShowAll: false
+            rememberSelection: bySession
+        }
+    )
+
+    region ticket-workflow-status (
+        name: Workflow du ticket
+        type: dynamicContent
+        source {
+            plsqlFunctionBody:
+                ```plsql
+                declare
+                  l_workflow_id number;
+                  l_state varchar2(100);
+                  l_title varchar2(4000);
+                  l_task_id number;
+                  l_task_subject varchar2(4000);
+                  l_workflow_url varchar2(4000);
+                  l_task_url varchar2(4000);
+                begin
+                  select workflow_id into l_workflow_id from sd_tickets where ticket_id=:P20_TICKET_ID;
+                
+                  select state_code, title
+                    into l_state, l_title
+                    from table(apex_workflow.get_workflows(
+                           p_context=>'SINGLE_WORKFLOW',
+                           p_workflow_id=>l_workflow_id));
+                
+                  begin
+                    select task_id, subject
+                      into l_task_id, l_task_subject
+                      from (
+                        select task_id, subject
+                          from apex_tasks
+                         where application_id=:APP_ID
+                           and detail_pk=to_char(:P20_TICKET_ID)
+                           and state_code in ('UNASSIGNED','ASSIGNED')
+                         order by created_on desc
+                      ) where rownum=1;
+                  exception when no_data_found then null;
+                  end;
+                
+                  l_workflow_url:=apex_page.get_url(p_page=>32,p_clear_cache=>'32',p_items=>'P32_WORKFLOW_ID',p_values=>l_workflow_id);
+                  if l_task_id is not null then
+                    l_task_url:=apex_page.get_url(p_page=>31,p_clear_cache=>'31',p_items=>'P31_TASK_ID',p_values=>l_task_id);
+                  end if;
+                
+                  return '<div class="sd-kpi-card sd-kpi-open"><div class="sd-kpi-icon"><span class="fa fa-workflow"></span></div>' ||
+                         '<div class="sd-kpi-content"><span class="sd-kpi-label">Workflow actif</span><strong class="sd-kpi-value">' || apex_escape.html(l_state) || '</strong>' ||
+                         '<span class="sd-kpi-caption">' || apex_escape.html(l_title) || '</span>' ||
+                         '<a class="sd-ticket-link" href="' || l_workflow_url || '">Voir le diagramme</a>' ||
+                         case when l_task_id is not null then ' &middot; <a class="sd-ticket-link" href="' || l_task_url || '">' || apex_escape.html(l_task_subject) || '</a>' end ||
+                         '</div></div>';
+                exception when no_data_found then return null;
+                end;
+                ```
+        }
+        layout {
+            sequence: 22
+            slot: body
+        }
+        appearance {
+            template: @/blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id=:P20_TICKET_ID and workflow_id is not null
+        }
+    )
+
+    pageItem P20_ASSIGNED_AGENT_ID (
+        type: selectList
+        label {
+            label: Agent affecte
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select full_name || ' - ' || email d, agent_id r from sd_agents where is_active = 'Y' order by full_name
+            displayExtraValues: false
+            nullDisplayValue: Selectionner un agent
+        }
+        layout {
+            sequence: 10
+            region: @ticket-actions
+            slot: regionBody
+            alignment: left
+            columnSpan: 6
+        }
+        appearance {
+            template: @/optional
+            templateOptions: #DEFAULT#
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P20_COMMENT_TEXT (
+        type: textarea
+        label {
+            label: Commentaire
+            alignment: left
+        }
+        settings {
+            autoHeight: true
+            charCounter: true
+        }
+        layout {
+            sequence: 20
+            region: @add-ticket-comment
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 9
+        }
+        appearance {
+            template: @/optional
+            templateOptions: #DEFAULT#
+            width: 60
+            height: 4
+            valuePlaceholder: Saisissez votre commentaire...
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P20_COMMENT_TYPE (
+        type: selectList
+        label {
+            label: Visibilite
+            alignment: left
+        }
+        lov {
+            type: staticValues
+            staticValues: STATIC2:Public;PUBLIC,Interne;INTERNAL
+            displayExtraValues: false
+            displayNullValue: false
+        }
+        layout {
+            sequence: 10
+            region: @add-ticket-comment
+            slot: regionBody
+            alignment: left
+            columnSpan: 3
+        }
+        appearance {
+            template: @/optional
+            templateOptions: #DEFAULT#
+        }
+        default {
+            type: static
+            staticValue: PUBLIC
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P20_RESOLUTION_NOTE (
+        type: textarea
+        label {
+            label: Note de resolution
+            alignment: left
+        }
+        settings {
+            autoHeight: true
+            charCounter: true
+        }
+        layout {
+            sequence: 20
+            region: @ticket-actions
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @/optional
+            templateOptions: #DEFAULT#
+            width: 60
+            height: 4
+            valuePlaceholder: Expliquez la solution apportee...
+        }
+        sessionState {
+            storage: request
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and status_code = 'IN_PROGRESS'
+        }
+    )
+
+    pageItem P20_STATUS_CODE (
+        type: hidden
+        layout {
+            sequence: 30
+            region: @ticket-detail
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    pageItem P20_TICKET_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            region: @ticket-detail
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+        }
+    )
+
+    pageItem P20_TICKET_NUMBER (
+        type: hidden
+        layout {
+            sequence: 20
+            region: @ticket-detail
+            slot: regionBody
+        }
+        sessionState {
+            storage: request
+        }
+    )
+
+    button add-comment (
+        buttonName: ADD_COMMENT
+        label: Ajouter le commentaire
+        layout {
+            sequence: 10
+            region: @add-ticket-comment
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+            ]
+            icon: fa-comment-o
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button assign-ticket (
+        buttonName: ASSIGN_TICKET
+        label: Affecter le ticket
+        layout {
+            sequence: 10
+            region: @ticket-actions
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-user-plus
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and workflow_id is null and status_code not in ('RESOLVED', 'CLOSED')
+        }
+    )
+
+    button back-to-tickets (
+        buttonName: BACK_TO_TICKETS
+        label: Retour aux tickets
+        layout {
+            sequence: 10
+            region: @ticket-detail-breadcrumb
+            slot: previous
+        }
+        appearance {
+            buttonTemplate: @/icon
+            templateOptions: [
+                #DEFAULT#
+            ]
+            icon: fa-arrow-left
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 10
+                clearCache: 10
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button close-ticket (
+        buttonName: CLOSE_TICKET
+        label: Fermer le ticket
+        layout {
+            sequence: 40
+            region: @ticket-detail-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-lock
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and workflow_id is null and status_code = 'RESOLVED'
+        }
+    )
+
+    button resolve-ticket (
+        buttonName: RESOLVE_TICKET
+        label: Resoudre le ticket
+        layout {
+            sequence: 30
+            region: @ticket-detail-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--success
+                t-Button--iconLeft
+            ]
+            icon: fa-check
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and workflow_id is null and status_code = 'IN_PROGRESS'
+        }
+    )
+
+    button start-ticket (
+        buttonName: START_TICKET
+        label: Commencer le traitement
+        layout {
+            sequence: 20
+            region: @ticket-detail-breadcrumb
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            templateOptions: [
+                #DEFAULT#
+                t-Button--iconLeft
+            ]
+            icon: fa-play
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: rowsReturned
+            sqlQuery: select 1 from sd_tickets where ticket_id = :P20_TICKET_ID and workflow_id is null and status_code = 'ASSIGNED'
+        }
+    )
+
+    process add-comment-process (
+        name: Ajouter le commentaire
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  sd_ticket_api.add_comment(
+                    p_ticket_id    => :P20_TICKET_ID,
+                    p_comment_text => :P20_COMMENT_TEXT,
+                    p_comment_type => :P20_COMMENT_TYPE,
+                    p_actor        => :APP_USER);
+                end;
+                ```
+        }
+        execution {
+            sequence: 50
+        }
+        successMessage {
+            successMessage: Le commentaire a ete ajoute.
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000205
+        }
+        serverSideCondition {
+            whenButtonPressed: @add-comment
+        }
+    )
+
+    process assign-ticket-process (
+        name: Affecter le ticket
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  sd_ticket_api.assign_ticket(
+                    p_ticket_id => :P20_TICKET_ID,
+                    p_agent_id  => :P20_ASSIGNED_AGENT_ID,
+                    p_actor     => :APP_USER);
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Le ticket a ete affecte.
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000201
+        }
+        serverSideCondition {
+            whenButtonPressed: @assign-ticket
+        }
+    )
+
+    process close-ticket-process (
+        name: Fermer le ticket
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  sd_ticket_api.close_ticket(
+                    p_ticket_id => :P20_TICKET_ID,
+                    p_actor     => :APP_USER);
+                end;
+                ```
+        }
+        execution {
+            sequence: 40
+        }
+        successMessage {
+            successMessage: Le ticket a ete ferme.
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000204
+        }
+        serverSideCondition {
+            whenButtonPressed: @close-ticket
+        }
+    )
+
+    process load-ticket-context (
+        name: Charger le contexte du ticket
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  select ticket_number, status_code, assigned_agent_id
+                    into :P20_TICKET_NUMBER, :P20_STATUS_CODE, :P20_ASSIGNED_AGENT_ID
+                    from sd_tickets
+                   where ticket_id = :P20_TICKET_ID;
+                exception
+                  when no_data_found then
+                    raise_application_error(-20001, 'Ticket introuvable.');
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000200
+        }
+    )
+
+    process resolve-ticket-process (
+        name: Resoudre le ticket
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  sd_ticket_api.resolve_ticket(
+                    p_ticket_id       => :P20_TICKET_ID,
+                    p_resolution_note => :P20_RESOLUTION_NOTE,
+                    p_actor           => :APP_USER);
+                end;
+                ```
+        }
+        execution {
+            sequence: 30
+        }
+        successMessage {
+            successMessage: Le ticket a ete resolu.
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000203
+        }
+        serverSideCondition {
+            whenButtonPressed: @resolve-ticket
+        }
+    )
+
+    process start-ticket-process (
+        name: Demarrer le traitement
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                  sd_ticket_api.start_ticket(
+                    p_ticket_id => :P20_TICKET_ID,
+                    p_actor     => :APP_USER);
+                end;
+                ```
+        }
+        execution {
+            sequence: 20
+        }
+        successMessage {
+            successMessage: Le traitement du ticket a commence.
+        }
+        advanced {
+            executionMappingIdentifier: 102020000000202
+        }
+        serverSideCondition {
+            whenButtonPressed: @start-ticket
+        }
+    )
+
+    branch (
+        name: Recharger le detail du ticket
+        execution {
+            sequence: 100
+        }
+        behavior {
+            target: {
+                page: 20
+                items: {
+                    P20_TICKET_ID: &P20_TICKET_ID.
+                }
+                clearCache: 20
+            }
+        }
+    )
+
+)

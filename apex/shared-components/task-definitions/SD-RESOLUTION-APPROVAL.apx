@@ -1,0 +1,47 @@
+taskDefinition SD_RESOLUTION_APPROVAL (
+    name: Validation de la resolution
+    type: approval
+    task {
+        subject: Valider la resolution du ticket &TICKET_NUMBER. - &SUBJECT.
+    }
+    deadline {
+        dueOnType: interval
+        interval: P2D
+    }
+    source {
+        type: sqlQuery
+        sqlQuery:
+            ```sql
+            select ticket_number, subject, priority_label, category_name, requester_name
+              from sd_ticket_overview_v
+             where ticket_id = :APEX$TASK_PK
+            ```
+    }
+    advanced {
+        detailsPage: {
+            page: 31
+            items: {
+                P31_TASK_ID: &TASK_ID.
+            }
+            clearCache: 31
+            action: resetPagination
+        }
+    }
+
+    participant (
+        value {
+            type: expression
+            plsqlExpression: sd_workflow_api.ticket_requester_username(:APEX$TASK_PK)
+        }
+    )
+
+    participant (
+        type: businessAdministrator
+        value {
+            type: expression
+            plsqlExpression: sd_workflow_api.admin_usernames
+        }
+    )
+
+)
+
