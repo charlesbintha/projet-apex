@@ -2,7 +2,8 @@
 
 La racine `apex/` contient la baseline APEXlang de l'application Service Desk Lite.
 
-- `deployments/default.json` cible le schéma `TESTCL`, avec un nom et un alias distincts de l'application 102 source. Il ne fixe volontairement aucun ID.
+- `deployments/default.json` cible l'application DEV 110 sur le schéma `TESTCL`.
+- `deployments/new-application.json` ne fixe aucun ID et sert uniquement à créer une nouvelle copie.
 - `deployments/source-app-102.json` conserve les métadonnées de la source et ne doit pas être utilisé pour créer la copie TESTCL.
 - `apex-exports/raw/` conserve localement l'archive reçue et est exclu de Git.
 - Les anciens exports SQL `f102_*.sql` sont conservés comme références historiques ; la baseline déployable est l'arborescence APEXlang.

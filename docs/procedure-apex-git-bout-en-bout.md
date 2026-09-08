@@ -42,11 +42,12 @@ SQLcl, les wallets, les mots de passe, les clés et les archives brutes sont exc
 
 Le schéma cible n'est pas choisi dans les pages APEXlang. Il est défini dans un fichier de déploiement.
 
-Le profil cible utilisé par défaut est `apex/deployments/default.json` :
+Le profil DEV utilisé par défaut est `apex/deployments/default.json` :
 
 ```json
 {
   "app": {
+    "id": 110,
     "name": "Demande Interne TESTCL",
     "alias": "DEMANDE-INTERNE-TESTCL",
     "databaseSession": {
@@ -56,7 +57,7 @@ Le profil cible utilisé par défaut est `apex/deployments/default.json` :
 }
 ```
 
-Ce profil ne contient volontairement pas d'ID. Lors d'une première installation, APEX peut ainsi attribuer un nouvel ID sans écraser l'application 102.
+Le profil `apex/deployments/new-application.json`, sans ID, doit être utilisé lorsqu'APEX doit attribuer un nouvel ID à une copie.
 
 Le profil de la source historique est conservé dans `apex/deployments/source-app-102.json` :
 

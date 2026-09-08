@@ -2,6 +2,8 @@
 
 Ce dépôt organise la reprise de l'application APEX 102 et son déploiement reproductible dans le schéma DEV `TESTCL` avec SQLcl, APEXlang et Git.
 
+Le processus d'équipe complet DEV–TEST–PROD est documenté dans [`docs/guide-equipe-apexlang-git-dev-test-prod.md`](docs/guide-equipe-apexlang-git-dev-test-prod.md).
+
 ## Situation actuelle
 
 - La connexion SQLcl OREST vers `TESTCL` fonctionne.
