@@ -4,6 +4,8 @@ Ce dépôt organise la reprise de l'application APEX 102 et son déploiement rep
 
 Le processus d'équipe complet DEV–TEST–PROD est documenté dans [`docs/guide-equipe-apexlang-git-dev-test-prod.md`](docs/guide-equipe-apexlang-git-dev-test-prod.md).
 
+La variante utilisant les exports SQL classiques, en fichier unique ou fractionné, est documentée dans [`docs/guide-equipe-apex-sql-export-unique-et-split.md`](docs/guide-equipe-apex-sql-export-unique-et-split.md).
+
 ## Situation actuelle
 
 - La connexion SQLcl OREST vers `TESTCL` fonctionne.
