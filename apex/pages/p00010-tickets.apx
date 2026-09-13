@@ -1,7 +1,7 @@
 page 10 (
-    name: Liste des tickets
+    name: Liste des Demande Interne
     alias: TICKETS
-    title: Liste des tickets - Service Desk Lite
+    title: Liste des Demande Interne
     appearance {
         pageTemplate: @/standard
         templateOptions: #DEFAULT#
@@ -148,7 +148,7 @@ page 10 (
             maxRowsToProcess: 1000000
         }
         messages {
-            whenNoDataFound: Aucun ticket ne correspond aux filtres.
+            whenNoDataFound: Aucun ticket ne correspond aux filtres séléctionnés.
         }
         download {
             sendAsEmail: false
